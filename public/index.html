@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Snake Multiplayer</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --accent: #22c55e;
+    --accent-dark: #15803d;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --danger: #ef4444;
+    --input-bg: #334155;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .screen { display: none; }
+  .screen.active { display: flex; }
+
+  /* ---------- MENU ---------- */
+  .menu-screen {
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 24px;
+  }
+  .menu-screen h1 {
+    font-size: 48px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    margin: 0;
+  }
+  .menu-screen .subtitle {
+    color: var(--muted);
+    font-size: 16px;
+    margin-top: -12px;
+  }
+  .menu-card {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 28px;
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .menu-card label {
+    font-size: 14px;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  input[type="text"] {
+    background: var(--input-bg);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 16px;
+    color: var(--text);
+    outline: none;
+    font-family: inherit;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+  input[type="text"]::placeholder { color: var(--muted); }
+  .btn-row { display: flex; gap: 10px; }
+  button {
+    background: var(--accent);
+    color: #062312;
+    border: none;
+    padding: 12px 20px;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+    flex: 1;
+  }
+  button:hover { background: var(--accent-dark); color: white; }
+  button:active { transform: scale(0.97); }
+  button.secondary {
+    background: var(--input-bg);
+    color: var(--text);
+  }
+  button.secondary:hover { background: #475569; }
+  .error-msg {
+    color: var(--danger);
+    font-size: 14px;
+    min-height: 20px;
+  }
+
+  /* ---------- LOBBY ---------- */
+  .lobby-screen {
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 24px;
+  }
+  .lobby-screen h1 { margin: 0; font-size: 32px; color: var(--accent); }
+  .room-code {
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: 8px;
+    color: var(--text);
+    background: var(--panel);
+    padding: 12px 28px;
+    border-radius: 12px;
+    user-select: all;
+  }
+  .player-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 320px;
+  }
+  .player-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--panel);
+    border-radius: 8px;
+    font-size: 16px;
+  }
+  .player-list .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .lobby-hint { color: var(--muted); font-size: 14px; text-align: center; max-width: 340px; }
+
+  /* ---------- GAME ---------- */
+  .game-screen {
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    gap: 10px;
+  }
+  .game-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 14px;
+  }
+  .game-header .room-label {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .game-header .room-label b { color: var(--text); letter-spacing: 2px; }
+  .board-wrap {
+    position: relative;
+    background: var(--panel);
+    padding: 8px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  }
+  canvas {
+    display: block;
+    background: #0b1222;
+    border-radius: 8px;
+  }
+  .death-overlay {
+    position: absolute;
+    inset: 8px;
+    border-radius: 8px;
+    background: rgba(15,23,42,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--danger);
+    pointer-events: none;
+  }
+  .death-overlay.hidden { display: none; }
+  .scoreboard {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .sb-player {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--panel);
+    border-radius: 8px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .sb-player .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .sb-player .sb-score { font-weight: 700; }
+  .sb-player.dead { opacity: 0.4; }
+  .game-controls {
+    display: flex;
+    gap: 10px;
+  }
+  .game-controls button {
+    padding: 8px 16px;
+    font-size: 14px;
+    flex: unset;
+  }
+
+  /* touchpad */
+  .touchpad {
+    display: none;
+    grid-template-columns: repeat(3, 54px);
+    grid-template-rows: repeat(3, 54px);
+    gap: 5px;
+  }
+  .touchpad button {
+    padding: 0;
+    font-size: 20px;
+    background: #334155;
+    color: var(--text);
+    flex: unset;
+  }
+  .touchpad .up    { grid-column: 2; grid-row: 1; }
+  .touchpad .left  { grid-column: 1; grid-row: 2; }
+  .touchpad .right { grid-column: 3; grid-row: 2; }
+  .touchpad .down  { grid-column: 2; grid-row: 3; }
+  @media (max-width: 640px) {
+    .touchpad { display: grid; }
+  }
+  @media (max-width: 520px) {
+    canvas { width: 100% !important; height: auto !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- MENU SCREEN -->
+<div id="menu-screen" class="screen menu-screen active">
+  <h1>SNAKE</h1>
+  <p class="subtitle">Multiplayer</p>
+  <div class="menu-card">
+    <label>Your name
+      <input type="text" id="name-input" placeholder="Enter name" maxlength="16" />
+    </label>
+    <div class="btn-row">
+      <button id="create-btn">Create Room</button>
+    </div>
+    <hr style="border:0;border-top:1px solid #334155;margin:4px 0" />
+    <label>Room code
+      <input type="text" id="code-input" placeholder="e.g. ABCD" maxlength="4" style="text-transform:uppercase;letter-spacing:4px;text-align:center" />
+    </label>
+    <div class="btn-row">
+      <button id="join-btn" class="secondary">Join Room</button>
+    </div>
+    <div class="error-msg" id="menu-error"></div>
+  </div>
+</div>
+
+<!-- LOBBY SCREEN -->
+<div id="lobby-screen" class="screen lobby-screen">
+  <h1>Lobby</h1>
+  <div class="room-code" id="lobby-code"></div>
+  <p class="lobby-hint">Share this code with friends so they can join.</p>
+  <ul class="player-list" id="lobby-players"></ul>
+  <button id="start-game-btn" style="max-width:320px">Start Game</button>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen" class="screen game-screen">
+  <div class="game-header">
+    <span class="room-label">Room <b id="game-room-code"></b></span>
+  </div>
+  <div class="scoreboard" id="scoreboard"></div>
+  <div class="board-wrap">
+    <canvas id="game-canvas" width="480" height="480"></canvas>
+    <div id="death-overlay" class="death-overlay hidden">Respawning...</div>
+  </div>
+  <div class="game-controls">
+    <button id="leave-btn" class="secondary">Leave</button>
+  </div>
+  <div class="touchpad" id="touchpad">
+    <button class="up" data-dir="up">&#9650;</button>
+    <button class="left" data-dir="left">&#9664;</button>
+    <button class="right" data-dir="right">&#9654;</button>
+    <button class="down" data-dir="down">&#9660;</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  // --- screens ---
+  const menuScreen = document.getElementById('menu-screen');
+  const lobbyScreen = document.getElementById('lobby-screen');
+  const gameScreen = document.getElementById('game-screen');
+  const screens = [menuScreen, lobbyScreen, gameScreen];
+
+  function showScreen(screen) {
+    screens.forEach(s => s.classList.remove('active'));
+    screen.classList.add('active');
+  }
+
+  // --- elements ---
+  const nameInput = document.getElementById('name-input');
+  const codeInput = document.getElementById('code-input');
+  const createBtn = document.getElementById('create-btn');
+  const joinBtn = document.getElementById('join-btn');
+  const menuError = document.getElementById('menu-error');
+  const lobbyCode = document.getElementById('lobby-code');
+  const lobbyPlayers = document.getElementById('lobby-players');
+  const startGameBtn = document.getElementById('start-game-btn');
+  const gameRoomCode = document.getElementById('game-room-code');
+  const scoreboard = document.getElementById('scoreboard');
+  const canvas = document.getElementById('game-canvas');
+  const ctx = canvas.getContext('2d');
+  const deathOverlay = document.getElementById('death-overlay');
+  const leaveBtn = document.getElementById('leave-btn');
+
+  let ws = null;
+  let myId = null;
+  let roomCode = null;
+  let lastState = null;
+
+  nameInput.value = localStorage.getItem('snake.name') || '';
+
+  function getName() {
+    const n = nameInput.value.trim() || 'Player';
+    localStorage.setItem('snake.name', n);
+    return n;
+  }
+
+  // --- WebSocket ---
+  function connect() {
+    return new Promise((resolve, reject) => {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const url = `${proto}://${location.host}`;
+      ws = new WebSocket(url);
+      ws.onopen = () => resolve();
+      ws.onerror = () => reject(new Error('Connection failed'));
+      ws.onclose = () => {
+        if (lastState) {
+          showScreen(menuScreen);
+          menuError.textContent = 'Disconnected from server.';
+          lastState = null;
+        }
+      };
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        handleMessage(msg);
+      };
+    });
+  }
+
+  function send(obj) {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+  }
+
+  function handleMessage(msg) {
+    if (msg.type === 'joined') {
+      myId = msg.playerId;
+      roomCode = msg.code;
+      menuError.textContent = '';
+    }
+    else if (msg.type === 'error') {
+      menuError.textContent = msg.message;
+    }
+    else if (msg.type === 'lobby') {
+      showScreen(lobbyScreen);
+      lobbyCode.textContent = msg.code;
+      lobbyPlayers.innerHTML = '';
+      msg.players.forEach(p => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="dot" style="background:${p.color}"></span> ${esc(p.name)}${p.id === myId ? ' (you)' : ''}`;
+        lobbyPlayers.appendChild(li);
+      });
+    }
+    else if (msg.type === 'state') {
+      if (!lastState) showScreen(gameScreen);
+      lastState = msg;
+      gameRoomCode.textContent = roomCode;
+      updateScoreboard(msg.players);
+      draw(msg);
+      const me = msg.players.find(p => p.id === myId);
+      deathOverlay.classList.toggle('hidden', !me || me.alive);
+    }
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function updateScoreboard(players) {
+    scoreboard.innerHTML = '';
+    const sorted = [...players].sort((a, b) => b.score - a.score);
+    sorted.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'sb-player' + (p.alive ? '' : ' dead');
+      div.innerHTML = `<span class="dot" style="background:${p.color}"></span>
+        <span>${esc(p.name)}</span>
+        <span class="sb-score">${p.score}</span>`;
+      scoreboard.appendChild(div);
+    });
+  }
+
+  // --- drawing ---
+  function draw(state) {
+    const COLS = state.cols;
+    const ROWS = state.rows;
+    const CELL = canvas.width / COLS;
+
+    ctx.fillStyle = '#0b1222';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // grid
+    ctx.strokeStyle = 'rgba(51,65,85,0.2)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < COLS; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * CELL, 0);
+      ctx.lineTo(i * CELL, canvas.height);
+      ctx.stroke();
+    }
+    for (let j = 1; j < ROWS; j++) {
+      ctx.beginPath();
+      ctx.moveTo(0, j * CELL);
+      ctx.lineTo(canvas.width, j * CELL);
+      ctx.stroke();
+    }
+
+    // food
+    state.food.forEach(f => {
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(f.x * CELL + CELL / 2, f.y * CELL + CELL / 2, CELL * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // snakes
+    state.players.forEach(p => {
+      if (!p.alive || p.snake.length === 0) return;
+      const color = p.color;
+      const rgb = hexToRgb(color);
+
+      for (let i = p.snake.length - 1; i >= 0; i--) {
+        const s = p.snake[i];
+        const alpha = i === 0 ? 1 : Math.max(0.35, 0.9 - (i / p.snake.length) * 0.55);
+        ctx.fillStyle = i === 0 ? color : `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+        const pad = i === 0 ? 1 : 2;
+        roundRect(ctx, s.x * CELL + pad, s.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 3);
+        ctx.fill();
+      }
+
+      // eyes
+      const head = p.snake[0];
+      const d = p.dir;
+      ctx.fillStyle = '#0b1222';
+      const cx = head.x * CELL + CELL / 2;
+      const cy = head.y * CELL + CELL / 2;
+      const offX = d.x * CELL * 0.18;
+      const offY = d.y * CELL * 0.18;
+      const perpX = -d.y * CELL * 0.2;
+      const perpY = d.x * CELL * 0.2;
+      const r = CELL * 0.08;
+      ctx.beginPath(); ctx.arc(cx + offX + perpX, cy + offY + perpY, r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + offX - perpX, cy + offY - perpY, r, 0, Math.PI * 2); ctx.fill();
+
+      // name tag
+      ctx.font = '10px system-ui';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.name, cx, head.y * CELL - 3);
+    });
+  }
+
+  function hexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // --- input ---
+  const keyMap = {
+    ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+    w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+    W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0],
+  };
+
+  window.addEventListener('keydown', e => {
+    const m = keyMap[e.key];
+    if (m) {
+      send({ type: 'dir', x: m[0], y: m[1] });
+      e.preventDefault();
+    }
+  });
+
+  document.getElementById('touchpad').addEventListener('click', e => {
+    const b = e.target.closest('button[data-dir]');
+    if (!b) return;
+    const d = b.dataset.dir;
+    const dirs = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
+    const m = dirs[d];
+    if (m) send({ type: 'dir', x: m[0], y: m[1] });
+  });
+
+  // swipe
+  let touchStart = null;
+  canvas.addEventListener('touchstart', e => {
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+  canvas.addEventListener('touchend', e => {
+    if (!touchStart) return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+    if (Math.abs(dx) > Math.abs(dy)) send({ type: 'dir', x: dx > 0 ? 1 : -1, y: 0 });
+    else send({ type: 'dir', x: 0, y: dy > 0 ? 1 : -1 });
+    touchStart = null;
+  }, { passive: true });
+
+  // --- buttons ---
+  createBtn.addEventListener('click', async () => {
+    menuError.textContent = '';
+    try {
+      if (!ws || ws.readyState !== 1) await connect();
+      send({ type: 'create', name: getName() });
+    } catch (err) {
+      menuError.textContent = err.message;
+    }
+  });
+
+  joinBtn.addEventListener('click', async () => {
+    menuError.textContent = '';
+    const code = codeInput.value.trim().toUpperCase();
+    if (code.length !== 4) {
+      menuError.textContent = 'Enter a 4-character room code.';
+      return;
+    }
+    try {
+      if (!ws || ws.readyState !== 1) await connect();
+      send({ type: 'join', name: getName(), code });
+    } catch (err) {
+      menuError.textContent = err.message;
+    }
+  });
+
+  startGameBtn.addEventListener('click', () => send({ type: 'start' }));
+
+  leaveBtn.addEventListener('click', () => {
+    if (ws) ws.close();
+    ws = null;
+    lastState = null;
+    myId = null;
+    showScreen(menuScreen);
+  });
+
+  // enter key shortcuts
+  codeInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') joinBtn.click();
+  });
+  nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') createBtn.click();
+  });
+})();
+</script>
+</body>
+</html>

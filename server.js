@@ -14,7 +14,7 @@ const GOLD_POINTS = 10;
 const WIN_SCORE = 100;
 
 const VALID_MAPS = ['dark', 'ocean', 'grassland', 'moon', 'city'];
-const VALID_SKINS = ['classic', 'pixel', 'neon', 'dots'];
+const VALID_SKINS = ['classic', 'pixel', 'neon', 'striped'];
 
 const COLORS = [
   '#22c55e', '#3b82f6', '#f59e0b', '#ef4444',

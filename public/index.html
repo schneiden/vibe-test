@@ -1228,6 +1228,9 @@
   codeInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') joinBtn.click();
   });
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  });
   nameInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') createBtn.click();
   });

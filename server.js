@@ -137,14 +137,9 @@ function tick(room) {
 
     player.dir = player.nextDir;
     const head = {
-      x: player.snake[0].x + player.dir.x,
-      y: player.snake[0].y + player.dir.y,
+      x: (player.snake[0].x + player.dir.x + COLS) % COLS,
+      y: (player.snake[0].y + player.dir.y + ROWS) % ROWS,
     };
-
-    if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS) {
-      killPlayer(room, player);
-      continue;
-    }
 
     let hitSelf = false;
     for (const s of player.snake) {

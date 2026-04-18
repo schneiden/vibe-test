@@ -123,6 +123,43 @@
     border-top: 1px solid #334155;
     margin: 4px 0;
   }
+  .skin-picker-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .skin-picker-label { font-size: 14px; color: var(--muted); }
+  .skin-picker {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .skin-option {
+    flex: unset;
+    background: var(--input-bg);
+    color: var(--text);
+    padding: 6px 4px 4px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .skin-option:hover { background: #475569; color: var(--text); }
+  .skin-option.selected {
+    border-color: var(--accent);
+    background: rgba(34,197,94,0.12);
+    color: var(--text);
+  }
+  .skin-option canvas {
+    width: 80px;
+    height: 28px;
+    background: #0b1222;
+    border-radius: 4px;
+    display: block;
+  }
+  .skin-option span { pointer-events: none; }
 
   /* ---------- LOBBY ---------- */
   .lobby-screen {
@@ -389,6 +426,28 @@
       <input type="text" id="name-input" placeholder="Enter name" maxlength="16" />
     </label>
 
+    <div class="skin-picker-wrap">
+      <div class="skin-picker-label">Your snake</div>
+      <div class="skin-picker" id="skin-picker">
+        <button type="button" class="skin-option selected" data-skin="classic">
+          <canvas width="80" height="28"></canvas>
+          <span>Classic</span>
+        </button>
+        <button type="button" class="skin-option" data-skin="pixel">
+          <canvas width="80" height="28"></canvas>
+          <span>Pixel</span>
+        </button>
+        <button type="button" class="skin-option" data-skin="neon">
+          <canvas width="80" height="28"></canvas>
+          <span>Neon</span>
+        </button>
+        <button type="button" class="skin-option" data-skin="striped">
+          <canvas width="80" height="28"></canvas>
+          <span>Striped</span>
+        </button>
+      </div>
+    </div>
+
     <hr class="divider" />
     <p class="section-title">Create a room</p>
     <label>Room name
@@ -492,6 +551,8 @@
   const roomNameInput = document.getElementById('room-name-input');
   const maxPlayersSelect = document.getElementById('max-players-select');
   const mapSelect = document.getElementById('map-select');
+  const skinPicker = document.getElementById('skin-picker');
+  let selectedSkin = localStorage.getItem('snake.skin') || 'classic';
   const codeInput = document.getElementById('code-input');
   const createBtn = document.getElementById('create-btn');
   const joinBtn = document.getElementById('join-btn');
@@ -788,36 +849,101 @@
 
     state.players.forEach(p => {
       if (!p.alive || p.snake.length === 0) return;
-      const color = p.color;
-      const rgb = hexToRgb(color);
-
-      for (let i = p.snake.length - 1; i >= 0; i--) {
-        const s = p.snake[i];
-        const alpha = i === 0 ? 1 : Math.max(0.35, 0.9 - (i / p.snake.length) * 0.55);
-        ctx.fillStyle = i === 0 ? color : `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
-        const pad = i === 0 ? 1 : 2;
-        roundRect(ctx, s.x * CELL + pad, s.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 3);
-        ctx.fill();
-      }
+      drawSnake(ctx, p.snake, p.dir, p.color, p.skin || 'classic', CELL);
 
       const head = p.snake[0];
-      const d = p.dir;
-      ctx.fillStyle = '#0b1222';
       const cx = head.x * CELL + CELL / 2;
-      const cy = head.y * CELL + CELL / 2;
-      const offX = d.x * CELL * 0.18;
-      const offY = d.y * CELL * 0.18;
-      const perpX = -d.y * CELL * 0.2;
-      const perpY = d.x * CELL * 0.2;
-      const r = CELL * 0.08;
-      ctx.beginPath(); ctx.arc(cx + offX + perpX, cy + offY + perpY, r, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + offX - perpX, cy + offY - perpY, r, 0, Math.PI * 2); ctx.fill();
-
       ctx.font = '11px system-ui';
-      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.lineWidth = 3;
       ctx.textAlign = 'center';
+      ctx.strokeText(p.name, cx, head.y * CELL - 4);
       ctx.fillText(p.name, cx, head.y * CELL - 4);
     });
+  }
+
+  function drawSnake(ctx, snake, dir, color, skin, CELL) {
+    const rgb = hexToRgb(color);
+    if (skin === 'pixel') {
+      for (let i = snake.length - 1; i >= 0; i--) {
+        const s = snake[i];
+        const alt = (i % 2 === 0);
+        ctx.fillStyle = alt ? color : `rgb(${Math.max(0,rgb.r-40)},${Math.max(0,rgb.g-40)},${Math.max(0,rgb.b-40)})`;
+        ctx.fillRect(s.x * CELL, s.y * CELL, CELL, CELL);
+        ctx.fillStyle = `rgba(255,255,255,${i === 0 ? 0.25 : 0.12})`;
+        ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, 2);
+        ctx.fillStyle = `rgba(0,0,0,${i === 0 ? 0.25 : 0.15})`;
+        ctx.fillRect(s.x * CELL + 1, s.y * CELL + CELL - 3, CELL - 2, 2);
+      }
+      drawHeadEyes(ctx, snake[0], dir, CELL, '#0b1222', true);
+      return;
+    }
+    if (skin === 'neon') {
+      ctx.save();
+      for (let i = snake.length - 1; i >= 0; i--) {
+        const s = snake[i];
+        const alpha = i === 0 ? 1 : Math.max(0.4, 0.9 - (i / snake.length) * 0.55);
+        ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha * 0.22})`;
+        ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = i === 0 ? 14 : 8;
+        const pad = 2;
+        roundRect(ctx, s.x * CELL + pad, s.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 5);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+      drawHeadEyes(ctx, snake[0], dir, CELL, color, false);
+      return;
+    }
+    if (skin === 'striped') {
+      for (let i = snake.length - 1; i >= 0; i--) {
+        const s = snake[i];
+        const stripe = (i % 2 === 0);
+        ctx.fillStyle = stripe ? color : '#fef3c7';
+        const pad = 1;
+        roundRect(ctx, s.x * CELL + pad, s.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, CELL * 0.45);
+        ctx.fill();
+        if (stripe) {
+          ctx.fillStyle = `rgba(255,255,255,${i === 0 ? 0.3 : 0.18})`;
+          ctx.beginPath();
+          ctx.arc(s.x * CELL + CELL * 0.35, s.y * CELL + CELL * 0.35, CELL * 0.12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      drawHeadEyes(ctx, snake[0], dir, CELL, '#0b1222', true);
+      return;
+    }
+    // classic
+    for (let i = snake.length - 1; i >= 0; i--) {
+      const s = snake[i];
+      const alpha = i === 0 ? 1 : Math.max(0.35, 0.9 - (i / snake.length) * 0.55);
+      ctx.fillStyle = i === 0 ? color : `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+      const pad = i === 0 ? 1 : 2;
+      roundRect(ctx, s.x * CELL + pad, s.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 3);
+      ctx.fill();
+    }
+    drawHeadEyes(ctx, snake[0], dir, CELL, '#0b1222', false);
+  }
+
+  function drawHeadEyes(ctx, head, dir, CELL, eyeColor, whiteRim) {
+    const cx = head.x * CELL + CELL / 2;
+    const cy = head.y * CELL + CELL / 2;
+    const offX = dir.x * CELL * 0.18;
+    const offY = dir.y * CELL * 0.18;
+    const perpX = -dir.y * CELL * 0.2;
+    const perpY = dir.x * CELL * 0.2;
+    const r = CELL * 0.1;
+    if (whiteRim) {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(cx + offX + perpX, cy + offY + perpY, r + 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + offX - perpX, cy + offY - perpY, r + 1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = eyeColor;
+    ctx.beginPath(); ctx.arc(cx + offX + perpX, cy + offY + perpY, r, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + offX - perpX, cy + offY - perpY, r, 0, Math.PI * 2); ctx.fill();
   }
 
   function hexToRgb(hex) {
@@ -934,6 +1060,7 @@
         roomName: roomNameInput.value.trim() || 'Room',
         maxPlayers: parseInt(maxPlayersSelect.value),
         mapTheme: mapSelect.value,
+        skin: selectedSkin,
       });
     } catch (err) {
       menuError.textContent = err.message;
@@ -949,7 +1076,7 @@
     }
     try {
       if (!ws || ws.readyState !== 1) await connect();
-      send({ type: 'join', name: getName(), code });
+      send({ type: 'join', name: getName(), code, skin: selectedSkin });
     } catch (err) {
       menuError.textContent = err.message;
     }
@@ -973,6 +1100,38 @@
   nameInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') createBtn.click();
   });
+
+  // skin picker
+  function drawSkinPreview(canvasEl, skin) {
+    const c = canvasEl.getContext('2d');
+    c.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    const CELL = 14;
+    const y = 1;
+    const color = '#22c55e';
+    const snake = [
+      { x: 4, y: y }, { x: 3, y: y }, { x: 2, y: y }, { x: 1, y: y }, { x: 0, y: y },
+    ];
+    drawSnake(c, snake, { x: 1, y: 0 }, color, skin, CELL);
+  }
+
+  function renderSkinPreviews() {
+    skinPicker.querySelectorAll('.skin-option').forEach(btn => {
+      const skin = btn.dataset.skin;
+      const previewCanvas = btn.querySelector('canvas');
+      if (previewCanvas) drawSkinPreview(previewCanvas, skin);
+      btn.classList.toggle('selected', skin === selectedSkin);
+    });
+  }
+
+  skinPicker.addEventListener('click', e => {
+    const btn = e.target.closest('.skin-option');
+    if (!btn) return;
+    selectedSkin = btn.dataset.skin;
+    localStorage.setItem('snake.skin', selectedSkin);
+    renderSkinPreviews();
+  });
+
+  renderSkinPreviews();
 })();
 </script>
 </body>

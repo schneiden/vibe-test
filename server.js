@@ -16,9 +16,9 @@ const WIN_SCORE = 100;
 const VALID_MAPS = ['dark', 'ocean', 'grassland', 'moon', 'city'];
 const VALID_SKINS = ['classic', 'pixel', 'neon', 'striped'];
 
-const COLORS = [
-  '#22c55e', '#3b82f6', '#f59e0b', '#ef4444',
-  '#a855f7', '#ec4899', '#14b8a6', '#f97316',
+const VALID_COLORS = [
+  '#22c55e', '#FF0000', '#FF7F00', '#FFFF00',
+  '#ffb8c6', '#0000FF', '#6ECEDA', '#C9CBE0',
 ];
 
 const rooms = new Map();
@@ -365,13 +365,13 @@ wss.on('connection', (ws) => {
       currentRoom = room;
       playerId = room.nextPlayerId++;
       room.hostId = playerId;
-      const colorIdx = (playerId - 1) % COLORS.length;
       const skin = VALID_SKINS.includes(msg.skin) ? msg.skin : 'classic';
+      const color = VALID_COLORS.includes(msg.color) ? msg.color : VALID_COLORS[0];
       room.players.set(playerId, {
         id: playerId,
         ws,
         name: (msg.name || 'Player').slice(0, 16),
-        color: COLORS[colorIdx],
+        color,
         skin,
         snake: [],
         dir: { x: 1, y: 0 },
@@ -397,13 +397,13 @@ wss.on('connection', (ws) => {
       }
       currentRoom = room;
       playerId = room.nextPlayerId++;
-      const colorIdx = (playerId - 1) % COLORS.length;
       const skin = VALID_SKINS.includes(msg.skin) ? msg.skin : 'classic';
+      const color = VALID_COLORS.includes(msg.color) ? msg.color : VALID_COLORS[0];
       const player = {
         id: playerId,
         ws,
         name: (msg.name || 'Player').slice(0, 16),
-        color: COLORS[colorIdx],
+        color,
         skin,
         snake: [],
         dir: { x: 1, y: 0 },

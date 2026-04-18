@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Snake Multiplayer</title>
+<title>Jack 作業一 : SNAKE</title>
 <style>
   :root {
     --bg: #0f172a;
@@ -160,6 +160,25 @@
     display: block;
   }
   .skin-option span { pointer-events: none; }
+  .color-picker-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .color-picker-label { font-size: 14px; color: var(--muted); }
+  .color-picker {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .color-dot {
+    flex: unset;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    padding: 0;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .color-dot:hover { transform: scale(1.15); }
+  .color-dot.selected { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.4); }
 
   /* ---------- LOBBY ---------- */
   .lobby-screen {
@@ -419,7 +438,7 @@
 
 <!-- MENU SCREEN -->
 <div id="menu-screen" class="screen menu-screen active">
-  <h1>SNAKE</h1>
+  <h1>Jack 作業一 : SNAKE</h1>
   <p class="subtitle">Multiplayer</p>
   <div class="menu-card">
     <label>Your name
@@ -445,6 +464,20 @@
           <canvas width="80" height="28"></canvas>
           <span>Striped</span>
         </button>
+      </div>
+    </div>
+
+    <div class="color-picker-wrap">
+      <div class="color-picker-label">Snake color</div>
+      <div class="color-picker" id="color-picker">
+        <button type="button" class="color-dot selected" data-color="#22c55e" style="background:#22c55e" title="Green"></button>
+        <button type="button" class="color-dot" data-color="#FF0000" style="background:#FF0000" title="Red"></button>
+        <button type="button" class="color-dot" data-color="#FF7F00" style="background:#FF7F00" title="Orange"></button>
+        <button type="button" class="color-dot" data-color="#FFFF00" style="background:#FFFF00" title="Yellow"></button>
+        <button type="button" class="color-dot" data-color="#ffb8c6" style="background:#ffb8c6" title="Pink"></button>
+        <button type="button" class="color-dot" data-color="#0000FF" style="background:#0000FF" title="Blue"></button>
+        <button type="button" class="color-dot" data-color="#6ECEDA" style="background:#6ECEDA" title="Indigo"></button>
+        <button type="button" class="color-dot" data-color="#C9CBE0" style="background:#C9CBE0" title="Violet"></button>
       </div>
     </div>
 
@@ -553,6 +586,8 @@
   const mapSelect = document.getElementById('map-select');
   const skinPicker = document.getElementById('skin-picker');
   let selectedSkin = localStorage.getItem('snake.skin') || 'classic';
+  let selectedColor = localStorage.getItem('snake.color') || '#22c55e';
+  const colorPicker = document.getElementById('color-picker');
   const codeInput = document.getElementById('code-input');
   const createBtn = document.getElementById('create-btn');
   const joinBtn = document.getElementById('join-btn');
@@ -1061,6 +1096,7 @@
         maxPlayers: parseInt(maxPlayersSelect.value),
         mapTheme: mapSelect.value,
         skin: selectedSkin,
+        color: selectedColor,
       });
     } catch (err) {
       menuError.textContent = err.message;
@@ -1076,7 +1112,7 @@
     }
     try {
       if (!ws || ws.readyState !== 1) await connect();
-      send({ type: 'join', name: getName(), code, skin: selectedSkin });
+      send({ type: 'join', name: getName(), code, skin: selectedSkin, color: selectedColor });
     } catch (err) {
       menuError.textContent = err.message;
     }
@@ -1107,11 +1143,10 @@
     c.clearRect(0, 0, canvasEl.width, canvasEl.height);
     const CELL = 14;
     const y = 1;
-    const color = '#22c55e';
     const snake = [
       { x: 4, y: y }, { x: 3, y: y }, { x: 2, y: y }, { x: 1, y: y }, { x: 0, y: y },
     ];
-    drawSnake(c, snake, { x: 1, y: 0 }, color, skin, CELL);
+    drawSnake(c, snake, { x: 1, y: 0 }, selectedColor, skin, CELL);
   }
 
   function renderSkinPreviews() {
@@ -1123,6 +1158,12 @@
     });
   }
 
+  function renderColorPicker() {
+    colorPicker.querySelectorAll('.color-dot').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.color === selectedColor);
+    });
+  }
+
   skinPicker.addEventListener('click', e => {
     const btn = e.target.closest('.skin-option');
     if (!btn) return;
@@ -1131,7 +1172,17 @@
     renderSkinPreviews();
   });
 
+  colorPicker.addEventListener('click', e => {
+    const btn = e.target.closest('.color-dot');
+    if (!btn) return;
+    selectedColor = btn.dataset.color;
+    localStorage.setItem('snake.color', selectedColor);
+    renderColorPicker();
+    renderSkinPreviews();
+  });
+
   renderSkinPreviews();
+  renderColorPicker();
 })();
 </script>
 </body>

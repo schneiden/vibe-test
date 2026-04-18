@@ -396,6 +396,7 @@
     </label>
     <label>Number of players
       <select id="max-players-select">
+        <option value="1">1 player (Solo)</option>
         <option value="2" selected>2 players</option>
         <option value="3">3 players</option>
         <option value="4">4 players</option>
@@ -403,6 +404,15 @@
         <option value="6">6 players</option>
         <option value="7">7 players</option>
         <option value="8">8 players</option>
+      </select>
+    </label>
+    <label>Map theme
+      <select id="map-select">
+        <option value="dark" selected>Dark (classic)</option>
+        <option value="ocean">Ocean</option>
+        <option value="grassland">Grassland</option>
+        <option value="moon">Moon</option>
+        <option value="city">City</option>
       </select>
     </label>
     <div class="btn-row">
@@ -481,6 +491,7 @@
   const nameInput = document.getElementById('name-input');
   const roomNameInput = document.getElementById('room-name-input');
   const maxPlayersSelect = document.getElementById('max-players-select');
+  const mapSelect = document.getElementById('map-select');
   const codeInput = document.getElementById('code-input');
   const createBtn = document.getElementById('create-btn');
   const joinBtn = document.getElementById('join-btn');
@@ -635,15 +646,106 @@
     });
   }
 
+  function drawMapBackground(theme) {
+    const W = canvas.width, H = canvas.height;
+    if (theme === 'ocean') {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#0a2463');
+      g.addColorStop(1, '#1b3a5c');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(100,180,255,0.10)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        const y = (H / 6) * i + ((Date.now() / 120 + i * 40) % (H / 6));
+        ctx.beginPath();
+        for (let x = 0; x <= W; x += 12) {
+          const yy = y + Math.sin((x + Date.now() / 80) / 40) * 4;
+          if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+      }
+      return 'rgba(120,200,255,0.12)';
+    }
+    if (theme === 'grassland') {
+      const sky = ctx.createLinearGradient(0, 0, 0, H * 0.6);
+      sky.addColorStop(0, '#87ceeb');
+      sky.addColorStop(1, '#b0e0e6');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, W, H * 0.6);
+      const grass = ctx.createLinearGradient(0, H * 0.6, 0, H);
+      grass.addColorStop(0, '#4caf50');
+      grass.addColorStop(1, '#2e7d32');
+      ctx.fillStyle = grass;
+      ctx.fillRect(0, H * 0.6, W, H * 0.4);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      const clouds = [[80, 60, 40], [320, 100, 50], [620, 50, 35], [500, 140, 45]];
+      clouds.forEach(([cx, cy, r]) => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.arc(cx + r * 0.8, cy + 5, r * 0.7, 0, Math.PI * 2);
+        ctx.arc(cx - r * 0.8, cy + 5, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      return 'rgba(30,80,30,0.15)';
+    }
+    if (theme === 'moon') {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#1a1a2e');
+      g.addColorStop(1, '#2b2d42');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      const stars = 60;
+      for (let i = 0; i < stars; i++) {
+        const sx = (i * 137) % W;
+        const sy = (i * 91) % H;
+        ctx.fillRect(sx, sy, 1.5, 1.5);
+      }
+      ctx.fillStyle = 'rgba(200,200,220,0.08)';
+      const craters = [[120, 180, 35], [500, 350, 45], [680, 120, 28], [250, 480, 40], [600, 520, 30]];
+      craters.forEach(([cx, cy, r]) => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      return 'rgba(180,180,200,0.10)';
+    }
+    if (theme === 'city') {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#0a0e27');
+      g.addColorStop(1, '#1a1f4a');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#0c1440';
+      const buildings = [[0, 380, 90], [100, 340, 70], [180, 400, 110], [300, 300, 80], [390, 360, 100], [500, 380, 70], [580, 320, 90], [680, 360, 120]];
+      buildings.forEach(([x, y, h]) => {
+        ctx.fillRect(x, y, 80, H - y);
+      });
+      const lightColors = ['#fbbf24', '#60a5fa', '#f472b6', '#34d399'];
+      for (let i = 0; i < 80; i++) {
+        const lx = (i * 73) % W;
+        const ly = 300 + ((i * 41) % 300);
+        ctx.fillStyle = lightColors[i % 4];
+        ctx.globalAlpha = 0.5 + ((i * 7) % 100) / 200;
+        ctx.fillRect(lx, ly, 3, 3);
+      }
+      ctx.globalAlpha = 1;
+      return 'rgba(0,255,255,0.08)';
+    }
+    ctx.fillStyle = '#0b1222';
+    ctx.fillRect(0, 0, W, H);
+    return 'rgba(51,65,85,0.2)';
+  }
+
   function draw(state) {
     const COLS = state.cols;
     const ROWS = state.rows;
     const CELL = canvas.width / COLS;
 
-    ctx.fillStyle = '#0b1222';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const gridColor = drawMapBackground(state.mapTheme || 'dark');
 
-    ctx.strokeStyle = 'rgba(51,65,85,0.2)';
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     for (let i = 1; i < COLS; i++) {
       ctx.beginPath();
@@ -831,6 +933,7 @@
         name: getName(),
         roomName: roomNameInput.value.trim() || 'Room',
         maxPlayers: parseInt(maxPlayersSelect.value),
+        mapTheme: mapSelect.value,
       });
     } catch (err) {
       menuError.textContent = err.message;

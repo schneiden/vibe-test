@@ -441,6 +441,15 @@ wss.on('connection', (ws) => {
       if (currentRoom.state === 'lobby') broadcastLobby(currentRoom);
     }
 
+    else if (msg.type === 'setColor') {
+      if (!currentRoom) return;
+      const player = currentRoom.players.get(playerId);
+      if (!player) return;
+      if (!VALID_COLORS.includes(msg.color)) return;
+      player.color = msg.color;
+      if (currentRoom.state === 'lobby') broadcastLobby(currentRoom);
+    }
+
     else if (msg.type === 'setMap') {
       if (!currentRoom) return;
       if (playerId !== currentRoom.hostId) return;

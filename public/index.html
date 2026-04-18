@@ -251,6 +251,35 @@
     margin-left: auto;
   }
 
+  .lobby-customize {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--panel);
+    padding: 14px 18px;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 420px;
+  }
+  .lobby-custom-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .lobby-custom-row.hidden { display: none; }
+  .lobby-custom-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .lobby-custom-row .color-picker { gap: 6px; }
+  .lobby-custom-row .color-dot { width: 26px; height: 26px; border-width: 2px; }
+  .lobby-custom-row select {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+
   /* ---------- GAME ---------- */
   .game-screen {
     min-height: 100vh;
@@ -529,6 +558,56 @@
   <div class="room-code" id="lobby-code"></div>
   <p class="lobby-hint">Share this code with friends so they can join.</p>
   <p class="lobby-status" id="lobby-status"></p>
+
+  <div class="lobby-customize" id="lobby-customize">
+    <div class="lobby-custom-row">
+      <div class="lobby-custom-label">Your snake</div>
+      <div class="skin-picker" id="lobby-skin-picker">
+        <button type="button" class="skin-option" data-skin="classic">
+          <canvas width="72" height="24"></canvas>
+          <span>Classic</span>
+        </button>
+        <button type="button" class="skin-option" data-skin="pixel">
+          <canvas width="72" height="24"></canvas>
+          <span>Pixel</span>
+        </button>
+        <button type="button" class="skin-option" data-skin="neon">
+          <canvas width="72" height="24"></canvas>
+          <span>Neon</span>
+        </button>
+        <button type="button" class="skin-option" data-skin="striped">
+          <canvas width="72" height="24"></canvas>
+          <span>Striped</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="lobby-custom-row">
+      <div class="lobby-custom-label">Color</div>
+      <div class="color-picker" id="lobby-color-picker">
+        <button type="button" class="color-dot" data-color="#22c55e" style="background:#22c55e"></button>
+        <button type="button" class="color-dot" data-color="#FF0000" style="background:#FF0000"></button>
+        <button type="button" class="color-dot" data-color="#FF7F00" style="background:#FF7F00"></button>
+        <button type="button" class="color-dot" data-color="#FFFF00" style="background:#FFFF00"></button>
+        <button type="button" class="color-dot" data-color="#ffb8c6" style="background:#ffb8c6"></button>
+        <button type="button" class="color-dot" data-color="#0000FF" style="background:#0000FF"></button>
+        <button type="button" class="color-dot" data-color="#6ECEDA" style="background:#6ECEDA"></button>
+        <button type="button" class="color-dot" data-color="#C9CBE0" style="background:#C9CBE0"></button>
+      </div>
+    </div>
+
+    <div class="lobby-custom-row host-only" id="lobby-map-row">
+      <div class="lobby-custom-label">Map theme (host only)</div>
+      <select id="lobby-map-select">
+        <option value="dark">Dark (classic)</option>
+        <option value="ocean">Ocean</option>
+        <option value="grassland">Grassland</option>
+        <option value="moon">Moon</option>
+        <option value="city">City</option>
+      </select>
+    </div>
+  </div>
+
   <ul class="player-list" id="lobby-players"></ul>
   <button id="start-game-btn" class="lobby-start-btn" disabled>Waiting for players...</button>
   <p class="lobby-hint" id="lobby-host-hint"></p>
@@ -598,6 +677,10 @@
   const lobbyPlayers = document.getElementById('lobby-players');
   const startGameBtn = document.getElementById('start-game-btn');
   const lobbyHostHint = document.getElementById('lobby-host-hint');
+  const lobbySkinPicker = document.getElementById('lobby-skin-picker');
+  const lobbyColorPicker = document.getElementById('lobby-color-picker');
+  const lobbyMapRow = document.getElementById('lobby-map-row');
+  const lobbyMapSelect = document.getElementById('lobby-map-select');
   const gameRoomLabel = document.getElementById('game-room-label');
   const scoreboard = document.getElementById('scoreboard');
   const canvas = document.getElementById('game-canvas');
@@ -664,6 +747,18 @@
       lobbyRoomName.textContent = msg.roomName;
       lobbyCode.textContent = msg.code;
       lobbyStatus.innerHTML = `Players: <b>${msg.players.length} / ${msg.maxPlayers}</b>`;
+
+      // sync my skin/color from server state (in case server validated/rejected)
+      const me = msg.players.find(p => p.id === myId);
+      if (me) {
+        if (me.color) selectedColor = me.color;
+        if (me.skin) selectedSkin = me.skin;
+      }
+      renderLobbyPickers();
+
+      // map row: only host can change
+      lobbyMapRow.classList.toggle('hidden', !isHost);
+      if (msg.mapTheme) lobbyMapSelect.value = msg.mapTheme;
 
       lobbyPlayers.innerHTML = '';
       msg.players.forEach(p => {
@@ -1183,6 +1278,45 @@
 
   renderSkinPreviews();
   renderColorPicker();
+
+  // --- lobby pickers ---
+  function renderLobbyPickers() {
+    lobbySkinPicker.querySelectorAll('.skin-option').forEach(btn => {
+      const skin = btn.dataset.skin;
+      const previewCanvas = btn.querySelector('canvas');
+      if (previewCanvas) drawSkinPreview(previewCanvas, skin);
+      btn.classList.toggle('selected', skin === selectedSkin);
+    });
+    lobbyColorPicker.querySelectorAll('.color-dot').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.color === selectedColor);
+    });
+  }
+
+  lobbySkinPicker.addEventListener('click', e => {
+    const btn = e.target.closest('.skin-option');
+    if (!btn) return;
+    selectedSkin = btn.dataset.skin;
+    localStorage.setItem('snake.skin', selectedSkin);
+    renderLobbyPickers();
+    renderSkinPreviews();
+    send({ type: 'setSkin', skin: selectedSkin });
+  });
+
+  lobbyColorPicker.addEventListener('click', e => {
+    const btn = e.target.closest('.color-dot');
+    if (!btn) return;
+    selectedColor = btn.dataset.color;
+    localStorage.setItem('snake.color', selectedColor);
+    renderLobbyPickers();
+    renderColorPicker();
+    renderSkinPreviews();
+    send({ type: 'setColor', color: selectedColor });
+  });
+
+  lobbyMapSelect.addEventListener('change', () => {
+    if (!isHost) return;
+    send({ type: 'setMap', map: lobbyMapSelect.value });
+  });
 })();
 </script>
 </body>

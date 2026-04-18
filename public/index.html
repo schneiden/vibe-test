@@ -51,7 +51,7 @@
     border-radius: 12px;
     padding: 28px;
     width: 100%;
-    max-width: 380px;
+    max-width: 400px;
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -63,7 +63,13 @@
     flex-direction: column;
     gap: 4px;
   }
-  input[type="text"] {
+  .menu-card .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+  }
+  input[type="text"], input[type="number"], select {
     background: var(--input-bg);
     border: 2px solid transparent;
     border-radius: 8px;
@@ -73,8 +79,15 @@
     outline: none;
     font-family: inherit;
   }
-  input[type="text"]:focus { border-color: var(--accent); }
-  input[type="text"]::placeholder { color: var(--muted); }
+  input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: var(--accent); }
+  input[type="text"]::placeholder, input[type="number"]::placeholder { color: var(--muted); }
+  select { cursor: pointer; }
+  select option { background: var(--input-bg); color: var(--text); }
+  .inline-row {
+    display: flex;
+    gap: 10px;
+  }
+  .inline-row > label { flex: 1; }
   .btn-row { display: flex; gap: 10px; }
   button {
     background: var(--accent);
@@ -95,10 +108,20 @@
     color: var(--text);
   }
   button.secondary:hover { background: #475569; }
+  button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  button:disabled:hover { background: var(--accent); color: #062312; }
   .error-msg {
     color: var(--danger);
     font-size: 14px;
     min-height: 20px;
+  }
+  .divider {
+    border: 0;
+    border-top: 1px solid #334155;
+    margin: 4px 0;
   }
 
   /* ---------- LOBBY ---------- */
@@ -146,7 +169,31 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
+  .player-slot-empty {
+    padding: 8px 12px;
+    background: var(--panel);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--muted);
+    border: 2px dashed #334155;
+    text-align: center;
+  }
   .lobby-hint { color: var(--muted); font-size: 14px; text-align: center; max-width: 340px; }
+  .lobby-status {
+    font-size: 16px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .lobby-status b { color: var(--accent); }
+  .host-badge {
+    font-size: 11px;
+    background: var(--accent);
+    color: #062312;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    margin-left: auto;
+  }
 
   /* ---------- GAME ---------- */
   .game-screen {
@@ -165,9 +212,9 @@
   }
   .game-header .room-label {
     color: var(--muted);
-    font-size: 13px;
+    font-size: 14px;
   }
-  .game-header .room-label b { color: var(--text); letter-spacing: 2px; }
+  .game-header .room-label b { color: var(--text); }
   .board-wrap {
     position: relative;
     background: var(--panel);
@@ -249,7 +296,7 @@
   @media (max-width: 640px) {
     .touchpad { display: grid; }
   }
-  @media (max-width: 520px) {
+  @media (max-width: 680px) {
     canvas { width: 100% !important; height: auto !important; }
   }
 </style>
@@ -264,10 +311,29 @@
     <label>Your name
       <input type="text" id="name-input" placeholder="Enter name" maxlength="16" />
     </label>
+
+    <hr class="divider" />
+    <p class="section-title">Create a room</p>
+    <label>Room name
+      <input type="text" id="room-name-input" placeholder="e.g. JJ's room" maxlength="32" />
+    </label>
+    <label>Number of players
+      <select id="max-players-select">
+        <option value="2" selected>2 players</option>
+        <option value="3">3 players</option>
+        <option value="4">4 players</option>
+        <option value="5">5 players</option>
+        <option value="6">6 players</option>
+        <option value="7">7 players</option>
+        <option value="8">8 players</option>
+      </select>
+    </label>
     <div class="btn-row">
       <button id="create-btn">Create Room</button>
     </div>
-    <hr style="border:0;border-top:1px solid #334155;margin:4px 0" />
+
+    <hr class="divider" />
+    <p class="section-title">Join a room</p>
     <label>Room code
       <input type="text" id="code-input" placeholder="e.g. ABCD" maxlength="4" style="text-transform:uppercase;letter-spacing:4px;text-align:center" />
     </label>
@@ -280,21 +346,23 @@
 
 <!-- LOBBY SCREEN -->
 <div id="lobby-screen" class="screen lobby-screen">
-  <h1>Lobby</h1>
+  <h1 id="lobby-room-name">Lobby</h1>
   <div class="room-code" id="lobby-code"></div>
   <p class="lobby-hint">Share this code with friends so they can join.</p>
+  <p class="lobby-status" id="lobby-status"></p>
   <ul class="player-list" id="lobby-players"></ul>
-  <button id="start-game-btn" style="max-width:320px">Start Game</button>
+  <button id="start-game-btn" style="max-width:320px" disabled>Waiting for players...</button>
+  <p class="lobby-hint" id="lobby-host-hint"></p>
 </div>
 
 <!-- GAME SCREEN -->
 <div id="game-screen" class="screen game-screen">
   <div class="game-header">
-    <span class="room-label">Room <b id="game-room-code"></b></span>
+    <span class="room-label" id="game-room-label"></span>
   </div>
   <div class="scoreboard" id="scoreboard"></div>
   <div class="board-wrap">
-    <canvas id="game-canvas" width="480" height="480"></canvas>
+    <canvas id="game-canvas" width="640" height="640"></canvas>
     <div id="death-overlay" class="death-overlay hidden">Respawning...</div>
   </div>
   <div class="game-controls">
@@ -310,7 +378,6 @@
 
 <script>
 (() => {
-  // --- screens ---
   const menuScreen = document.getElementById('menu-screen');
   const lobbyScreen = document.getElementById('lobby-screen');
   const gameScreen = document.getElementById('game-screen');
@@ -321,16 +388,20 @@
     screen.classList.add('active');
   }
 
-  // --- elements ---
   const nameInput = document.getElementById('name-input');
+  const roomNameInput = document.getElementById('room-name-input');
+  const maxPlayersSelect = document.getElementById('max-players-select');
   const codeInput = document.getElementById('code-input');
   const createBtn = document.getElementById('create-btn');
   const joinBtn = document.getElementById('join-btn');
   const menuError = document.getElementById('menu-error');
+  const lobbyRoomName = document.getElementById('lobby-room-name');
   const lobbyCode = document.getElementById('lobby-code');
+  const lobbyStatus = document.getElementById('lobby-status');
   const lobbyPlayers = document.getElementById('lobby-players');
   const startGameBtn = document.getElementById('start-game-btn');
-  const gameRoomCode = document.getElementById('game-room-code');
+  const lobbyHostHint = document.getElementById('lobby-host-hint');
+  const gameRoomLabel = document.getElementById('game-room-label');
   const scoreboard = document.getElementById('scoreboard');
   const canvas = document.getElementById('game-canvas');
   const ctx = canvas.getContext('2d');
@@ -341,6 +412,7 @@
   let myId = null;
   let roomCode = null;
   let lastState = null;
+  let isHost = false;
 
   nameInput.value = localStorage.getItem('snake.name') || '';
 
@@ -350,7 +422,6 @@
     return n;
   }
 
-  // --- WebSocket ---
   function connect() {
     return new Promise((resolve, reject) => {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -387,18 +458,44 @@
     }
     else if (msg.type === 'lobby') {
       showScreen(lobbyScreen);
+      isHost = (msg.hostId === myId);
+      lobbyRoomName.textContent = msg.roomName;
       lobbyCode.textContent = msg.code;
+      lobbyStatus.innerHTML = `Players: <b>${msg.players.length} / ${msg.maxPlayers}</b>`;
+
       lobbyPlayers.innerHTML = '';
       msg.players.forEach(p => {
         const li = document.createElement('li');
-        li.innerHTML = `<span class="dot" style="background:${p.color}"></span> ${esc(p.name)}${p.id === myId ? ' (you)' : ''}`;
+        const youTag = p.id === myId ? ' (you)' : '';
+        const hostTag = p.id === msg.hostId ? `<span class="host-badge">HOST</span>` : '';
+        li.innerHTML = `<span class="dot" style="background:${p.color}"></span> ${esc(p.name)}${youTag}${hostTag}`;
         lobbyPlayers.appendChild(li);
       });
+      const emptySlots = msg.maxPlayers - msg.players.length;
+      for (let i = 0; i < emptySlots; i++) {
+        const li = document.createElement('li');
+        li.className = 'player-slot-empty';
+        li.textContent = 'Waiting for player...';
+        lobbyPlayers.appendChild(li);
+      }
+
+      const ready = msg.players.length >= msg.maxPlayers;
+      if (isHost) {
+        startGameBtn.style.display = '';
+        startGameBtn.disabled = !ready;
+        startGameBtn.textContent = ready ? 'Start Game' : `Waiting for ${emptySlots} more player${emptySlots > 1 ? 's' : ''}...`;
+        lobbyHostHint.textContent = ready ? 'All players are here! Click Start Game to begin.' : '';
+      } else {
+        startGameBtn.style.display = 'none';
+        lobbyHostHint.textContent = ready
+          ? 'All players are here! Waiting for the host to start the game...'
+          : `Waiting for ${emptySlots} more player${emptySlots > 1 ? 's' : ''} to join...`;
+      }
     }
     else if (msg.type === 'state') {
       if (!lastState) showScreen(gameScreen);
       lastState = msg;
-      gameRoomCode.textContent = roomCode;
+      gameRoomLabel.innerHTML = `<b>${esc(msg.roomName)}</b> &middot; Room <b style="letter-spacing:2px">${esc(roomCode)}</b>`;
       updateScoreboard(msg.players);
       draw(msg);
       const me = msg.players.find(p => p.id === myId);
@@ -425,7 +522,6 @@
     });
   }
 
-  // --- drawing ---
   function draw(state) {
     const COLS = state.cols;
     const ROWS = state.rows;
@@ -434,7 +530,6 @@
     ctx.fillStyle = '#0b1222';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // grid
     ctx.strokeStyle = 'rgba(51,65,85,0.2)';
     ctx.lineWidth = 1;
     for (let i = 1; i < COLS; i++) {
@@ -450,7 +545,6 @@
       ctx.stroke();
     }
 
-    // food
     state.food.forEach(f => {
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
@@ -458,7 +552,6 @@
       ctx.fill();
     });
 
-    // snakes
     state.players.forEach(p => {
       if (!p.alive || p.snake.length === 0) return;
       const color = p.color;
@@ -473,7 +566,6 @@
         ctx.fill();
       }
 
-      // eyes
       const head = p.snake[0];
       const d = p.dir;
       ctx.fillStyle = '#0b1222';
@@ -487,11 +579,10 @@
       ctx.beginPath(); ctx.arc(cx + offX + perpX, cy + offY + perpY, r, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(cx + offX - perpX, cy + offY - perpY, r, 0, Math.PI * 2); ctx.fill();
 
-      // name tag
-      ctx.font = '10px system-ui';
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '11px system-ui';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
       ctx.textAlign = 'center';
-      ctx.fillText(p.name, cx, head.y * CELL - 3);
+      ctx.fillText(p.name, cx, head.y * CELL - 4);
     });
   }
 
@@ -511,7 +602,6 @@
     ctx.closePath();
   }
 
-  // --- input ---
   const keyMap = {
     ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
     w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
@@ -535,7 +625,6 @@
     if (m) send({ type: 'dir', x: m[0], y: m[1] });
   });
 
-  // swipe
   let touchStart = null;
   canvas.addEventListener('touchstart', e => {
     touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -550,12 +639,16 @@
     touchStart = null;
   }, { passive: true });
 
-  // --- buttons ---
   createBtn.addEventListener('click', async () => {
     menuError.textContent = '';
     try {
       if (!ws || ws.readyState !== 1) await connect();
-      send({ type: 'create', name: getName() });
+      send({
+        type: 'create',
+        name: getName(),
+        roomName: roomNameInput.value.trim() || 'Room',
+        maxPlayers: parseInt(maxPlayersSelect.value),
+      });
     } catch (err) {
       menuError.textContent = err.message;
     }
@@ -583,10 +676,10 @@
     ws = null;
     lastState = null;
     myId = null;
+    isHost = false;
     showScreen(menuScreen);
   });
 
-  // enter key shortcuts
   codeInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') joinBtn.click();
   });

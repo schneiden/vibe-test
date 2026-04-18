@@ -4,10 +4,10 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
-const COLS = 30;
-const ROWS = 30;
+const COLS = 40;
+const ROWS = 40;
 const TICK_MS = 150;
-const FOOD_COUNT = 3;
+const FOOD_COUNT = 5;
 const RESPAWN_DELAY_MS = 3000;
 
 const COLORS = [
@@ -27,9 +27,12 @@ function genRoomCode() {
   return code;
 }
 
-function createRoom(code) {
+function createRoom(code, roomName, maxPlayers) {
   const room = {
     code,
+    roomName,
+    maxPlayers,
+    hostId: null,
     players: new Map(),
     food: [],
     state: 'lobby',
@@ -180,6 +183,7 @@ function broadcastState(room) {
     food: room.food,
     cols: COLS,
     rows: ROWS,
+    roomName: room.roomName,
   });
   for (const p of room.players.values()) {
     if (p.ws.readyState === 1) p.ws.send(msg);
@@ -191,7 +195,16 @@ function broadcastLobby(room) {
   for (const p of room.players.values()) {
     players.push({ id: p.id, name: p.name, color: p.color });
   }
-  const msg = JSON.stringify({ type: 'lobby', players, code: room.code });
+  const ready = room.players.size >= room.maxPlayers;
+  const msg = JSON.stringify({
+    type: 'lobby',
+    players,
+    code: room.code,
+    roomName: room.roomName,
+    maxPlayers: room.maxPlayers,
+    hostId: room.hostId,
+    ready,
+  });
   for (const p of room.players.values()) {
     if (p.ws.readyState === 1) p.ws.send(msg);
   }
@@ -214,6 +227,9 @@ function removePlayer(room, playerId) {
   if (room.players.size === 0) {
     destroyRoom(room.code);
   } else {
+    if (room.hostId === playerId) {
+      room.hostId = room.players.keys().next().value;
+    }
     if (room.state === 'lobby') broadcastLobby(room);
     else broadcastState(room);
   }
@@ -261,9 +277,12 @@ wss.on('connection', (ws) => {
 
     if (msg.type === 'create') {
       const code = genRoomCode();
-      const room = createRoom(code);
+      const roomName = (msg.roomName || 'Room').slice(0, 32);
+      const maxPlayers = Math.max(2, Math.min(8, parseInt(msg.maxPlayers) || 2));
+      const room = createRoom(code, roomName, maxPlayers);
       currentRoom = room;
       playerId = room.nextPlayerId++;
+      room.hostId = playerId;
       const colorIdx = (playerId - 1) % COLORS.length;
       room.players.set(playerId, {
         id: playerId,
@@ -288,8 +307,8 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
         return;
       }
-      if (room.players.size >= 8) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Room is full (max 8)' }));
+      if (room.players.size >= room.maxPlayers) {
+        ws.send(JSON.stringify({ type: 'error', message: `Room is full (${room.maxPlayers}/${room.maxPlayers})` }));
         return;
       }
       currentRoom = room;
@@ -319,6 +338,8 @@ wss.on('connection', (ws) => {
 
     else if (msg.type === 'start') {
       if (!currentRoom) return;
+      if (playerId !== currentRoom.hostId) return;
+      if (currentRoom.players.size < currentRoom.maxPlayers) return;
       startGame(currentRoom);
     }
 

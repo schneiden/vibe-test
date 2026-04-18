@@ -5,10 +5,13 @@ const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
 const COLS = 40;
-const ROWS = 40;
+const ROWS = 30;
 const TICK_MS = 150;
 const FOOD_COUNT = 5;
 const RESPAWN_DELAY_MS = 3000;
+const GOLD_INTERVAL_MS = 60000;
+const GOLD_POINTS = 10;
+const WIN_SCORE = 100;
 
 const COLORS = [
   '#22c55e', '#3b82f6', '#f59e0b', '#ef4444',
@@ -35,8 +38,11 @@ function createRoom(code, roomName, maxPlayers) {
     hostId: null,
     players: new Map(),
     food: [],
+    goldFood: [],
+    winner: null,
     state: 'lobby',
     tickInterval: null,
+    goldInterval: null,
     nextPlayerId: 1,
   };
   rooms.set(code, room);
@@ -47,6 +53,7 @@ function destroyRoom(code) {
   const room = rooms.get(code);
   if (!room) return;
   clearInterval(room.tickInterval);
+  clearInterval(room.goldInterval);
   rooms.delete(code);
 }
 
@@ -74,12 +81,18 @@ function spawnPos(room) {
   return { snake: [{ x: 3, y: 3 }, { x: 2, y: 3 }, { x: 1, y: 3 }], dir: { x: 1, y: 0 } };
 }
 
-function placeFood(room) {
+function collectOccupied(room) {
   const occupied = new Set();
   for (const p of room.players.values()) {
     if (p.alive) for (const s of p.snake) occupied.add(`${s.x},${s.y}`);
   }
   for (const f of room.food) occupied.add(`${f.x},${f.y}`);
+  for (const g of room.goldFood) occupied.add(`${g.x},${g.y}`);
+  return occupied;
+}
+
+function placeFood(room) {
+  const occupied = collectOccupied(room);
   for (let attempt = 0; attempt < 300; attempt++) {
     const x = Math.floor(Math.random() * COLS);
     const y = Math.floor(Math.random() * ROWS);
@@ -92,6 +105,20 @@ function placeFood(room) {
 
 function fillFood(room) {
   while (room.food.length < FOOD_COUNT) placeFood(room);
+}
+
+function placeGoldFood(room) {
+  if (room.state !== 'playing') return;
+  const occupied = collectOccupied(room);
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const x = Math.floor(Math.random() * COLS);
+    const y = Math.floor(Math.random() * ROWS);
+    if (!occupied.has(`${x},${y}`)) {
+      room.goldFood.push({ x, y });
+      broadcastState(room);
+      return;
+    }
+  }
 }
 
 function spawnPlayer(room, player) {
@@ -137,19 +164,59 @@ function tick(room) {
 
     player.snake.unshift(head);
 
-    let ate = false;
-    for (let i = 0; i < room.food.length; i++) {
-      if (room.food[i].x === head.x && room.food[i].y === head.y) {
-        room.food.splice(i, 1);
-        player.score += 1;
-        ate = true;
+    let grew = false;
+    for (let i = 0; i < room.goldFood.length; i++) {
+      if (room.goldFood[i].x === head.x && room.goldFood[i].y === head.y) {
+        room.goldFood.splice(i, 1);
+        player.score += GOLD_POINTS;
+        grew = true;
         break;
       }
     }
-    if (!ate) player.snake.pop();
+    if (!grew) {
+      for (let i = 0; i < room.food.length; i++) {
+        if (room.food[i].x === head.x && room.food[i].y === head.y) {
+          room.food.splice(i, 1);
+          player.score += 1;
+          grew = true;
+          break;
+        }
+      }
+    }
+    if (!grew) player.snake.pop();
   }
 
   fillFood(room);
+
+  let winner = null;
+  for (const p of room.players.values()) {
+    if (p.score >= WIN_SCORE && (!winner || p.score > winner.score)) {
+      winner = p;
+    }
+  }
+  if (winner) {
+    endGame(room, winner);
+    return;
+  }
+
+  broadcastState(room);
+}
+
+function endGame(room, winner) {
+  room.state = 'finished';
+  clearInterval(room.tickInterval);
+  clearInterval(room.goldInterval);
+  room.tickInterval = null;
+  room.goldInterval = null;
+  room.winner = {
+    id: winner.id,
+    name: winner.name,
+    color: winner.color,
+    score: winner.score,
+  };
+  for (const p of room.players.values()) {
+    if (p.respawnTimer) { clearTimeout(p.respawnTimer); p.respawnTimer = null; }
+  }
   broadcastState(room);
 }
 
@@ -181,9 +248,13 @@ function broadcastState(room) {
     type: 'state',
     players,
     food: room.food,
+    goldFood: room.goldFood,
     cols: COLS,
     rows: ROWS,
     roomName: room.roomName,
+    winner: room.winner,
+    state: room.state,
+    winScore: WIN_SCORE,
   });
   for (const p of room.players.values()) {
     if (p.ws.readyState === 1) p.ws.send(msg);
@@ -212,11 +283,19 @@ function broadcastLobby(room) {
 
 function startGame(room) {
   if (room.state === 'playing') return;
+  clearInterval(room.tickInterval);
+  clearInterval(room.goldInterval);
   room.state = 'playing';
   room.food = [];
+  room.goldFood = [];
+  room.winner = null;
+  for (const p of room.players.values()) {
+    if (p.respawnTimer) { clearTimeout(p.respawnTimer); p.respawnTimer = null; }
+  }
   fillFood(room);
   for (const p of room.players.values()) spawnPlayer(room, p);
   room.tickInterval = setInterval(() => tick(room), TICK_MS);
+  room.goldInterval = setInterval(() => placeGoldFood(room), GOLD_INTERVAL_MS);
   broadcastState(room);
 }
 
@@ -331,6 +410,8 @@ wss.on('connection', (ws) => {
       if (room.state === 'playing') {
         spawnPlayer(room, player);
         broadcastState(room);
+      } else if (room.state === 'finished') {
+        broadcastState(room);
       } else {
         broadcastLobby(room);
       }
@@ -339,7 +420,8 @@ wss.on('connection', (ws) => {
     else if (msg.type === 'start') {
       if (!currentRoom) return;
       if (playerId !== currentRoom.hostId) return;
-      if (currentRoom.players.size < currentRoom.maxPlayers) return;
+      if (currentRoom.state === 'playing') return;
+      if (currentRoom.state === 'lobby' && currentRoom.players.size < currentRoom.maxPlayers) return;
       startGame(currentRoom);
     }
 

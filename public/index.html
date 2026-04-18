@@ -241,6 +241,44 @@
     pointer-events: none;
   }
   .death-overlay.hidden { display: none; }
+  .winner-overlay {
+    position: absolute;
+    inset: 8px;
+    border-radius: 8px;
+    background: rgba(15,23,42,0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .winner-overlay.hidden { display: none; }
+  .winner-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+  }
+  .winner-label {
+    font-size: 18px;
+    letter-spacing: 6px;
+    color: #fbbf24;
+    font-weight: 700;
+  }
+  .winner-name {
+    font-size: 40px;
+    font-weight: 800;
+    color: var(--text);
+  }
+  .winner-score {
+    font-size: 20px;
+    color: var(--muted);
+  }
+  .winner-hint {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
   .scoreboard {
     display: flex;
     gap: 16px;
@@ -296,7 +334,7 @@
   @media (max-width: 640px) {
     .touchpad { display: grid; }
   }
-  @media (max-width: 680px) {
+  @media (max-width: 840px) {
     canvas { width: 100% !important; height: auto !important; }
   }
 </style>
@@ -362,8 +400,17 @@
   </div>
   <div class="scoreboard" id="scoreboard"></div>
   <div class="board-wrap">
-    <canvas id="game-canvas" width="640" height="640"></canvas>
+    <canvas id="game-canvas" width="800" height="600"></canvas>
     <div id="death-overlay" class="death-overlay hidden">Respawning...</div>
+    <div id="winner-overlay" class="winner-overlay hidden">
+      <div class="winner-card">
+        <div class="winner-label">WINNER</div>
+        <div class="winner-name" id="winner-name"></div>
+        <div class="winner-score" id="winner-score"></div>
+        <button id="play-again-btn" style="margin-top:12px;max-width:200px">Play Again</button>
+        <p class="winner-hint" id="winner-hint"></p>
+      </div>
+    </div>
   </div>
   <div class="game-controls">
     <button id="leave-btn" class="secondary">Leave</button>
@@ -406,6 +453,11 @@
   const canvas = document.getElementById('game-canvas');
   const ctx = canvas.getContext('2d');
   const deathOverlay = document.getElementById('death-overlay');
+  const winnerOverlay = document.getElementById('winner-overlay');
+  const winnerName = document.getElementById('winner-name');
+  const winnerScore = document.getElementById('winner-score');
+  const winnerHint = document.getElementById('winner-hint');
+  const playAgainBtn = document.getElementById('play-again-btn');
   const leaveBtn = document.getElementById('leave-btn');
 
   let ws = null;
@@ -495,11 +547,29 @@
     else if (msg.type === 'state') {
       if (!lastState) showScreen(gameScreen);
       lastState = msg;
-      gameRoomLabel.innerHTML = `<b>${esc(msg.roomName)}</b> &middot; Room <b style="letter-spacing:2px">${esc(roomCode)}</b>`;
+      gameRoomLabel.innerHTML = `<b>${esc(msg.roomName)}</b> &middot; Room <b style="letter-spacing:2px">${esc(roomCode)}</b> &middot; First to <b>${msg.winScore}</b> wins`;
       updateScoreboard(msg.players);
       draw(msg);
       const me = msg.players.find(p => p.id === myId);
-      deathOverlay.classList.toggle('hidden', !me || me.alive);
+      const finished = msg.state === 'finished' && msg.winner;
+
+      if (finished) {
+        deathOverlay.classList.add('hidden');
+        winnerOverlay.classList.remove('hidden');
+        winnerName.textContent = msg.winner.name;
+        winnerName.style.color = msg.winner.color;
+        winnerScore.textContent = `Score: ${msg.winner.score}`;
+        if (isHost) {
+          playAgainBtn.style.display = '';
+          winnerHint.textContent = 'Click Play Again to start a new match.';
+        } else {
+          playAgainBtn.style.display = 'none';
+          winnerHint.textContent = 'Waiting for the host to start a new match...';
+        }
+      } else {
+        winnerOverlay.classList.add('hidden');
+        deathOverlay.classList.toggle('hidden', !me || me.alive);
+      }
     }
   }
 
@@ -551,6 +621,25 @@
       ctx.arc(f.x * CELL + CELL / 2, f.y * CELL + CELL / 2, CELL * 0.38, 0, Math.PI * 2);
       ctx.fill();
     });
+
+    if (state.goldFood) {
+      state.goldFood.forEach(g => {
+        const gx = g.x * CELL + CELL / 2;
+        const gy = g.y * CELL + CELL / 2;
+        const pulse = 0.38 + Math.sin(Date.now() / 200) * 0.06;
+        const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, CELL * 0.6);
+        grad.addColorStop(0, '#fef3c7');
+        grad.addColorStop(0.5, '#fbbf24');
+        grad.addColorStop(1, '#f59e0b');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(gx, gy, CELL * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+    }
 
     state.players.forEach(p => {
       if (!p.alive || p.snake.length === 0) return;
@@ -670,6 +759,7 @@
   });
 
   startGameBtn.addEventListener('click', () => send({ type: 'start' }));
+  playAgainBtn.addEventListener('click', () => send({ type: 'start' }));
 
   leaveBtn.addEventListener('click', () => {
     if (ws) ws.close();

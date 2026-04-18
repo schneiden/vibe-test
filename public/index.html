@@ -313,26 +313,62 @@
     flex: unset;
   }
 
-  /* touchpad */
-  .touchpad {
+  /* lobby start button */
+  .lobby-start-btn {
+    max-width: 220px;
+    padding: 10px 16px;
+    font-size: 15px;
+  }
+
+  /* virtual joystick */
+  .joystick-zone {
     display: none;
-    grid-template-columns: repeat(3, 54px);
-    grid-template-rows: repeat(3, 54px);
-    gap: 5px;
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 140px;
+    height: 140px;
+    z-index: 100;
   }
-  .touchpad button {
-    padding: 0;
-    font-size: 20px;
-    background: #334155;
-    color: var(--text);
-    flex: unset;
+  .joystick-base {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 60%, rgba(255,255,255,0.02) 100%);
+    border: 2px solid rgba(255,255,255,0.15);
+    backdrop-filter: blur(4px);
   }
-  .touchpad .up    { grid-column: 2; grid-row: 1; }
-  .touchpad .left  { grid-column: 1; grid-row: 2; }
-  .touchpad .right { grid-column: 3; grid-row: 2; }
-  .touchpad .down  { grid-column: 2; grid-row: 3; }
-  @media (max-width: 640px) {
-    .touchpad { display: grid; }
+  .joystick-knob {
+    position: absolute;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.35), rgba(255,255,255,0.08));
+    border: 2px solid rgba(255,255,255,0.25);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.2);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: transform 0.05s;
+    pointer-events: none;
+  }
+  .joystick-arrows {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .joystick-arrows span {
+    position: absolute;
+    font-size: 14px;
+    color: rgba(255,255,255,0.25);
+  }
+  .joystick-arrows .j-up    { top: 6px; left: 50%; transform: translateX(-50%); }
+  .joystick-arrows .j-down  { bottom: 6px; left: 50%; transform: translateX(-50%); }
+  .joystick-arrows .j-left  { left: 8px; top: 50%; transform: translateY(-50%); }
+  .joystick-arrows .j-right { right: 8px; top: 50%; transform: translateY(-50%); }
+
+  @media (pointer: coarse) {
+    .joystick-zone { display: block; }
   }
   @media (max-width: 840px) {
     canvas { width: 100% !important; height: auto !important; }
@@ -389,7 +425,7 @@
   <p class="lobby-hint">Share this code with friends so they can join.</p>
   <p class="lobby-status" id="lobby-status"></p>
   <ul class="player-list" id="lobby-players"></ul>
-  <button id="start-game-btn" style="max-width:320px" disabled>Waiting for players...</button>
+  <button id="start-game-btn" class="lobby-start-btn" disabled>Waiting for players...</button>
   <p class="lobby-hint" id="lobby-host-hint"></p>
 </div>
 
@@ -415,11 +451,15 @@
   <div class="game-controls">
     <button id="leave-btn" class="secondary">Leave</button>
   </div>
-  <div class="touchpad" id="touchpad">
-    <button class="up" data-dir="up">&#9650;</button>
-    <button class="left" data-dir="left">&#9664;</button>
-    <button class="right" data-dir="right">&#9654;</button>
-    <button class="down" data-dir="down">&#9660;</button>
+  <div class="joystick-zone" id="joystick">
+    <div class="joystick-base"></div>
+    <div class="joystick-arrows">
+      <span class="j-up">&#9650;</span>
+      <span class="j-down">&#9660;</span>
+      <span class="j-left">&#9664;</span>
+      <span class="j-right">&#9654;</span>
+    </div>
+    <div class="joystick-knob" id="joystick-knob"></div>
   </div>
 </div>
 
@@ -705,15 +745,66 @@
     }
   });
 
-  document.getElementById('touchpad').addEventListener('click', e => {
-    const b = e.target.closest('button[data-dir]');
-    if (!b) return;
-    const d = b.dataset.dir;
-    const dirs = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
-    const m = dirs[d];
-    if (m) send({ type: 'dir', x: m[0], y: m[1] });
-  });
+  // virtual joystick
+  const joystickEl = document.getElementById('joystick');
+  const knobEl = document.getElementById('joystick-knob');
+  let joystickActive = false;
+  let lastJoystickDir = null;
+  const JOYSTICK_RADIUS = 70;
+  const KNOB_MAX = 36;
+  const DEAD_ZONE = 12;
 
+  function getJoystickCenter() {
+    const rect = joystickEl.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+
+  function handleJoystickMove(cx, cy, tx, ty) {
+    let dx = tx - cx;
+    let dy = ty - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > KNOB_MAX) {
+      dx = (dx / dist) * KNOB_MAX;
+      dy = (dy / dist) * KNOB_MAX;
+    }
+    knobEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    if (dist < DEAD_ZONE) return;
+    let dir;
+    if (Math.abs(dx) > Math.abs(dy)) dir = dx > 0 ? 'right' : 'left';
+    else dir = dy > 0 ? 'down' : 'up';
+    if (dir !== lastJoystickDir) {
+      lastJoystickDir = dir;
+      const dirs = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
+      send({ type: 'dir', x: dirs[dir][0], y: dirs[dir][1] });
+    }
+  }
+
+  function resetKnob() {
+    knobEl.style.transform = 'translate(-50%, -50%)';
+    lastJoystickDir = null;
+    joystickActive = false;
+  }
+
+  joystickEl.addEventListener('touchstart', e => {
+    e.preventDefault();
+    joystickActive = true;
+    const t = e.touches[0];
+    const c = getJoystickCenter();
+    handleJoystickMove(c.x, c.y, t.clientX, t.clientY);
+  }, { passive: false });
+
+  joystickEl.addEventListener('touchmove', e => {
+    if (!joystickActive) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    const c = getJoystickCenter();
+    handleJoystickMove(c.x, c.y, t.clientX, t.clientY);
+  }, { passive: false });
+
+  joystickEl.addEventListener('touchend', resetKnob);
+  joystickEl.addEventListener('touchcancel', resetKnob);
+
+  // swipe on canvas (still works on touch devices without joystick)
   let touchStart = null;
   canvas.addEventListener('touchstart', e => {
     touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };

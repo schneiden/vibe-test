@@ -13,6 +13,9 @@ const GOLD_INTERVAL_MS = 60000;
 const GOLD_POINTS = 10;
 const WIN_SCORE = 100;
 
+const VALID_MAPS = ['dark', 'ocean', 'grassland', 'moon', 'city'];
+const VALID_SKINS = ['classic', 'pixel', 'neon', 'dots'];
+
 const COLORS = [
   '#22c55e', '#3b82f6', '#f59e0b', '#ef4444',
   '#a855f7', '#ec4899', '#14b8a6', '#f97316',
@@ -30,11 +33,12 @@ function genRoomCode() {
   return code;
 }
 
-function createRoom(code, roomName, maxPlayers) {
+function createRoom(code, roomName, maxPlayers, mapTheme) {
   const room = {
     code,
     roomName,
     maxPlayers,
+    mapTheme,
     hostId: null,
     players: new Map(),
     food: [],
@@ -233,6 +237,7 @@ function broadcastState(room) {
       id: p.id,
       name: p.name,
       color: p.color,
+      skin: p.skin,
       snake: p.snake,
       dir: p.dir,
       alive: p.alive,
@@ -247,6 +252,7 @@ function broadcastState(room) {
     cols: COLS,
     rows: ROWS,
     roomName: room.roomName,
+    mapTheme: room.mapTheme,
     winner: room.winner,
     state: room.state,
     winScore: WIN_SCORE,
@@ -259,7 +265,7 @@ function broadcastState(room) {
 function broadcastLobby(room) {
   const players = [];
   for (const p of room.players.values()) {
-    players.push({ id: p.id, name: p.name, color: p.color });
+    players.push({ id: p.id, name: p.name, color: p.color, skin: p.skin });
   }
   const ready = room.players.size >= room.maxPlayers;
   const msg = JSON.stringify({
@@ -267,6 +273,7 @@ function broadcastLobby(room) {
     players,
     code: room.code,
     roomName: room.roomName,
+    mapTheme: room.mapTheme,
     maxPlayers: room.maxPlayers,
     hostId: room.hostId,
     ready,
@@ -352,17 +359,20 @@ wss.on('connection', (ws) => {
     if (msg.type === 'create') {
       const code = genRoomCode();
       const roomName = (msg.roomName || 'Room').slice(0, 32);
-      const maxPlayers = Math.max(2, Math.min(8, parseInt(msg.maxPlayers) || 2));
-      const room = createRoom(code, roomName, maxPlayers);
+      const maxPlayers = Math.max(1, Math.min(8, parseInt(msg.maxPlayers) || 2));
+      const mapTheme = VALID_MAPS.includes(msg.mapTheme) ? msg.mapTheme : 'dark';
+      const room = createRoom(code, roomName, maxPlayers, mapTheme);
       currentRoom = room;
       playerId = room.nextPlayerId++;
       room.hostId = playerId;
       const colorIdx = (playerId - 1) % COLORS.length;
+      const skin = VALID_SKINS.includes(msg.skin) ? msg.skin : 'classic';
       room.players.set(playerId, {
         id: playerId,
         ws,
         name: (msg.name || 'Player').slice(0, 16),
         color: COLORS[colorIdx],
+        skin,
         snake: [],
         dir: { x: 1, y: 0 },
         nextDir: { x: 1, y: 0 },
@@ -388,11 +398,13 @@ wss.on('connection', (ws) => {
       currentRoom = room;
       playerId = room.nextPlayerId++;
       const colorIdx = (playerId - 1) % COLORS.length;
+      const skin = VALID_SKINS.includes(msg.skin) ? msg.skin : 'classic';
       const player = {
         id: playerId,
         ws,
         name: (msg.name || 'Player').slice(0, 16),
         color: COLORS[colorIdx],
+        skin,
         snake: [],
         dir: { x: 1, y: 0 },
         nextDir: { x: 1, y: 0 },
@@ -418,6 +430,24 @@ wss.on('connection', (ws) => {
       if (currentRoom.state === 'playing') return;
       if (currentRoom.state === 'lobby' && currentRoom.players.size < currentRoom.maxPlayers) return;
       startGame(currentRoom);
+    }
+
+    else if (msg.type === 'setSkin') {
+      if (!currentRoom) return;
+      const player = currentRoom.players.get(playerId);
+      if (!player) return;
+      if (!VALID_SKINS.includes(msg.skin)) return;
+      player.skin = msg.skin;
+      if (currentRoom.state === 'lobby') broadcastLobby(currentRoom);
+    }
+
+    else if (msg.type === 'setMap') {
+      if (!currentRoom) return;
+      if (playerId !== currentRoom.hostId) return;
+      if (currentRoom.state !== 'lobby') return;
+      if (!VALID_MAPS.includes(msg.map)) return;
+      currentRoom.mapTheme = msg.map;
+      broadcastLobby(currentRoom);
     }
 
     else if (msg.type === 'dir') {

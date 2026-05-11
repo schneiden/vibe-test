@@ -26,6 +26,7 @@ import pytest
 from tests.api_client import (
     ApiResponse,
     cate_items,
+    detect_auth_scheme,
     extract_items,
     has_api_key,
     hot_items,
@@ -37,8 +38,21 @@ from tests.api_client import (
 # Set VIBE_API_KEY before running, or these tests are skipped.
 pytestmark = pytest.mark.skipif(
     not has_api_key(),
-    reason="set VIBE_API_KEY (and optionally VIBE_API_KEY_HEADER / VIBE_API_KEY_PARAM) to run the live API tests",
+    reason="set VIBE_API_KEY (stage/prod key) to run the live API tests; see README",
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _auth() -> None:
+    """Figure out (once) how the API wants the key sent, before any test runs."""
+    if not has_api_key():
+        return
+    scheme = detect_auth_scheme()
+    if scheme is None:
+        pytest.fail(
+            "VIBE_API_KEY is set but every known auth scheme was rejected (401/403). "
+            "Set VIBE_API_AUTH_SCHEME / VIBE_API_KEY_HEADER / VIBE_API_KEY_PARAM explicitly."
+        )
 
 T_PROVIDER = os.environ.get("VIBE_T_PROVIDER", "yauc")
 
@@ -176,15 +190,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sleep", type=float, default=0.3, help="seconds between runs")
     args = parser.parse_args(argv)
 
-    from tests.api_client import has_api_key
+    from tests import api_client
 
     categories = args.category or DEFAULT_CATEGORY_IDS
-    if not has_api_key():
+    print(f"base_url={api_client.BASE_URL} provider={args.provider} categories={categories} runs={args.runs}")
+    if not api_client.has_api_key():
         print(
             "WARNING: VIBE_API_KEY is not set — the API will return 401 MISSING_API_KEY. "
             "Export it first, e.g.  export VIBE_API_KEY=xxxx"
         )
-    print(f"provider={args.provider} categories={categories} runs={args.runs}")
+    else:
+        scheme = api_client.detect_auth_scheme(f"/api/v1/{args.provider}/hot_items")
+        if scheme is None:
+            print("ERROR: API key set but no known auth scheme was accepted (all returned 401/403).")
+            return 2
+        print(f"auth scheme detected: {scheme.name} "
+              f"({'header ' + scheme.header if scheme.header else 'query param ' + str(scheme.param)})")
 
     failures = 0
     for cat in categories:

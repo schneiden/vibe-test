@@ -1,6 +1,6 @@
 # vibe-test
 
-## API tests for `s-api.aff.i-urls.com`
+## API tests for the i-urls affiliate API
 
 Automated checks for the two endpoints documented under 首頁和分類頁API:
 
@@ -12,22 +12,39 @@ and that the items carry real data (i.e. the API is **not** consistently
 "吐空值"). Each endpoint is also hit several times to catch intermittent empty
 responses.
 
+Environments:
+
+| env | base URL |
+| --- | --- |
+| stage | `https://s-api.aff.i-urls.com` (default) |
+| production | `https://api.aff.i-urls.com` |
+
+Docs: `https://s-api.aff.i-urls.com/docs#`
+
 ### Authentication
 
 The API rejects unauthenticated calls with `401 MISSING_API_KEY`, so you must
-supply a key:
+supply a key via `VIBE_API_KEY`:
 
 ```bash
-export VIBE_API_KEY="your-key-here"
+# stage
+export VIBE_API_KEY="<stage api key>"
+
+# production
+export VIBE_BASE_URL="https://api.aff.i-urls.com"
+export VIBE_API_KEY="<production api key>"
 ```
 
-By default the key is sent as the `X-API-Key` request header. If the API expects
-a different header name or a query-string parameter, override it:
+How the key is transmitted is **auto-detected**: before the tests run, the
+client tries the known schemes (`X-API-Key` header, `Authorization: Bearer …`,
+`?api_key=…`, etc.) against a live endpoint and pins the first one that isn't
+rejected. If you already know the scheme, set it explicitly to skip detection:
 
 ```bash
-export VIBE_API_KEY_HEADER="Authorization"   # e.g. send "Authorization: <key>"
-# or
-export VIBE_API_KEY_PARAM="api_key"          # send ?api_key=<key> instead of a header
+export VIBE_API_AUTH_SCHEME="x-api-key"        # one of the known scheme names
+# or force a custom header / query param:
+export VIBE_API_KEY_HEADER="Authorization"
+export VIBE_API_KEY_PARAM="api_key"
 ```
 
 Without `VIBE_API_KEY`, the pytest suite is **skipped** (not failed).
@@ -36,7 +53,7 @@ Without `VIBE_API_KEY`, the pytest suite is **skipped** (not failed).
 
 ```bash
 pip3 install -r requirements-dev.txt
-export VIBE_API_KEY="your-key-here"
+export VIBE_API_KEY="<api key>"
 python3 -m pytest tests/ -v
 ```
 
@@ -45,25 +62,27 @@ Configurable via env vars:
 | var | default | meaning |
 | --- | --- | --- |
 | `VIBE_API_KEY` | _(unset)_ | API key; required, suite is skipped without it |
-| `VIBE_API_KEY_HEADER` | `X-API-Key` | header name the key is sent in |
-| `VIBE_API_KEY_PARAM` | _(unset)_ | if set, send the key as this query param instead of a header |
+| `VIBE_API_AUTH_SCHEME` | `auto` | force an auth scheme name instead of auto-detecting |
+| `VIBE_API_KEY_HEADER` | _(unset)_ | force the key into this request header |
+| `VIBE_API_KEY_PARAM` | _(unset)_ | force the key into this query-string param |
+| `VIBE_BASE_URL` | `https://s-api.aff.i-urls.com` | API base URL (stage vs. production) |
 | `VIBE_T_PROVIDER` | `yauc` | `t_provider` path segment |
 | `VIBE_CATEGORY_IDS` | `2084261179,2084032596,2084046530` | comma-separated `category_id`s for `cate_items` |
 | `VIBE_RUNS` | `3` | sequential calls per endpoint for the flake-detection tests |
-| `VIBE_BASE_URL` | `https://s-api.aff.i-urls.com` | API base URL |
 
 ### Run as a one-shot probe
 
 ```bash
-export VIBE_API_KEY="your-key-here"
+export VIBE_API_KEY="<api key>"
 python3 -m tests.test_api --runs 5 --category 2084261179
 ```
 
-Prints a per-run line like:
+Prints the detected auth scheme and a per-run line like:
 
 ```
+auth scheme detected: x-api-key (header X-API-Key)
 [OK] cate_items[2084261179] run 1/5 http=200 elapsed=420ms items=20 empty_items=0 avg_fields=8.40
 ```
 
-Exits non-zero if any run returns `non-200`, an empty list, or a list whose
+Exits non-zero if any run returns non-200, an empty list, or a list whose
 items are all empty.

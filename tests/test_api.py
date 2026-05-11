@@ -160,21 +160,30 @@ def test_optional_query_params_are_echoed() -> None:
 
 # --- standalone runner -------------------------------------------------------
 
-def _print_run(label: str, resp: ApiResponse) -> dict[str, Any]:
+def _print_run(label: str, resp: ApiResponse, show_body_on_fail: bool = True, body_chars: int = 800) -> dict[str, Any]:
     items = extract_items(resp.body) or []
     summary = summarize_items(items)
     if resp.status == 401:
         status_word = "AUTH (401, set VIBE_API_KEY)"
+        ok = False
     elif resp.status == 200 and summary["total"] > 0 and summary["empty_items"] < summary["total"]:
         status_word = "OK"
+        ok = True
     else:
         status_word = "EMPTY/FAIL"
+        ok = False
     print(
         f"[{status_word}] {label} "
         f"http={resp.status} elapsed={resp.elapsed_ms:.0f}ms "
         f"items={summary['total']} empty_items={summary['empty_items']} "
         f"avg_fields={summary['avg_non_empty_fields']:.2f}"
     )
+    if not ok and show_body_on_fail:
+        body_preview = resp.raw[:body_chars] if resp.raw else "(empty body)"
+        print(f"    url:  {resp.url}")
+        print(f"    body: {body_preview}")
+        if isinstance(resp.body, dict):
+            print(f"    top-level keys: {list(resp.body.keys())}")
     return summary
 
 

@@ -6,14 +6,27 @@ Kept dependency-free so the tests can run in CI without installing requests.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-BASE_URL = "https://s-api.aff.i-urls.com"
+BASE_URL = os.environ.get("VIBE_BASE_URL", "https://s-api.aff.i-urls.com")
 DEFAULT_TIMEOUT = 15.0
+
+# The API rejects unauthenticated calls with 401 MISSING_API_KEY.
+# Provide the key via VIBE_API_KEY. By default it is sent as the `X-API-Key`
+# header; override the header name with VIBE_API_KEY_HEADER, or send it as a
+# query-string parameter instead by setting VIBE_API_KEY_PARAM (e.g. "api_key").
+API_KEY = os.environ.get("VIBE_API_KEY", "").strip()
+API_KEY_HEADER = os.environ.get("VIBE_API_KEY_HEADER", "X-API-Key").strip()
+API_KEY_PARAM = os.environ.get("VIBE_API_KEY_PARAM", "").strip()
+
+
+def has_api_key() -> bool:
+    return bool(API_KEY)
 
 
 @dataclass
@@ -27,18 +40,27 @@ class ApiResponse:
 
 def _build_url(path: str, query: dict[str, Any] | None) -> str:
     url = f"{BASE_URL}{path}"
-    if query:
-        clean = {k: v for k, v in query.items() if v is not None and v != ""}
-        if clean:
-            url = f"{url}?{urllib.parse.urlencode(clean)}"
+    merged: dict[str, Any] = dict(query or {})
+    if API_KEY and API_KEY_PARAM:
+        merged[API_KEY_PARAM] = API_KEY
+    clean = {k: v for k, v in merged.items() if v is not None and v != ""}
+    if clean:
+        url = f"{url}?{urllib.parse.urlencode(clean)}"
     return url
+
+
+def _headers() -> dict[str, str]:
+    headers = {"Accept": "application/json", "User-Agent": "vibe-test-api-check/1.0"}
+    if API_KEY and not API_KEY_PARAM:
+        headers[API_KEY_HEADER] = API_KEY
+    return headers
 
 
 def get_json(path: str, query: dict[str, Any] | None = None, timeout: float = DEFAULT_TIMEOUT) -> ApiResponse:
     import time
 
     url = _build_url(path, query)
-    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "vibe-test-api-check/1.0"})
+    req = urllib.request.Request(url, headers=_headers())
     started = time.perf_counter()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:

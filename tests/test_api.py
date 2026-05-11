@@ -27,9 +27,17 @@ from tests.api_client import (
     ApiResponse,
     cate_items,
     extract_items,
+    has_api_key,
     hot_items,
     item_non_empty_field_count,
     summarize_items,
+)
+
+# The endpoints require an API key (401 MISSING_API_KEY otherwise).
+# Set VIBE_API_KEY before running, or these tests are skipped.
+pytestmark = pytest.mark.skipif(
+    not has_api_key(),
+    reason="set VIBE_API_KEY (and optionally VIBE_API_KEY_HEADER / VIBE_API_KEY_PARAM) to run the live API tests",
 )
 
 T_PROVIDER = os.environ.get("VIBE_T_PROVIDER", "yauc")
@@ -50,6 +58,11 @@ MIN_NON_EMPTY_FIELDS_PER_ITEM = 3
 # --- assertion helpers -------------------------------------------------------
 
 def _assert_ok(resp: ApiResponse, label: str) -> list[Any]:
+    if resp.status == 401:
+        pytest.fail(
+            f"{label}: HTTP 401 — API key missing or wrong. "
+            f"Check VIBE_API_KEY / VIBE_API_KEY_HEADER / VIBE_API_KEY_PARAM. body: {resp.raw[:300]}"
+        )
     assert resp.status == 200, (
         f"{label}: HTTP {resp.status} from {resp.url}\nbody: {resp.raw[:500]}"
     )
@@ -136,7 +149,12 @@ def test_optional_query_params_are_echoed() -> None:
 def _print_run(label: str, resp: ApiResponse) -> dict[str, Any]:
     items = extract_items(resp.body) or []
     summary = summarize_items(items)
-    status_word = "OK" if resp.status == 200 and summary["total"] > 0 and summary["empty_items"] < summary["total"] else "EMPTY/FAIL"
+    if resp.status == 401:
+        status_word = "AUTH (401, set VIBE_API_KEY)"
+    elif resp.status == 200 and summary["total"] > 0 and summary["empty_items"] < summary["total"]:
+        status_word = "OK"
+    else:
+        status_word = "EMPTY/FAIL"
     print(
         f"[{status_word}] {label} "
         f"http={resp.status} elapsed={resp.elapsed_ms:.0f}ms "
@@ -158,7 +176,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sleep", type=float, default=0.3, help="seconds between runs")
     args = parser.parse_args(argv)
 
+    from tests.api_client import has_api_key
+
     categories = args.category or DEFAULT_CATEGORY_IDS
+    if not has_api_key():
+        print(
+            "WARNING: VIBE_API_KEY is not set — the API will return 401 MISSING_API_KEY. "
+            "Export it first, e.g.  export VIBE_API_KEY=xxxx"
+        )
     print(f"provider={args.provider} categories={categories} runs={args.runs}")
 
     failures = 0

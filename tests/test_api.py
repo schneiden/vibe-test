@@ -56,10 +56,10 @@ def _auth() -> None:
 
 T_PROVIDER = os.environ.get("VIBE_T_PROVIDER", "yauc")
 
-# Yahoo!オークション top-level category IDs. Override via env var if needed.
-# 2084261179 = ファッション (a stable, well-populated parent category).
+# Real Yahoo!オークション category IDs that carry inventory (from the products DB).
+# Override via VIBE_CATEGORY_IDS if needed.
 DEFAULT_CATEGORY_IDS = os.environ.get(
-    "VIBE_CATEGORY_IDS", "2084261179,2084032596,2084046530"
+    "VIBE_CATEGORY_IDS", "2092101503,24698,18028718,2092096354"
 ).split(",")
 
 # How many sequential calls to make per endpoint when checking for "always empty" regressions.

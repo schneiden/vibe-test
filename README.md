@@ -67,21 +67,21 @@ Configurable via env vars:
 | `VIBE_API_KEY_PARAM` | _(unset)_ | force the key into this query-string param |
 | `VIBE_BASE_URL` | `https://s-api.aff.i-urls.com` | API base URL (stage vs. production) |
 | `VIBE_T_PROVIDER` | `yauc` | `t_provider` path segment |
-| `VIBE_CATEGORY_IDS` | `2084261179,2084032596,2084046530` | comma-separated `category_id`s for `cate_items` |
+| `VIBE_CATEGORY_IDS` | `2092101503,24698,18028718,2092096354` | comma-separated `category_id`s for `cate_items` |
 | `VIBE_RUNS` | `3` | sequential calls per endpoint for the flake-detection tests |
 
 ### Run as a one-shot probe
 
 ```bash
 export VIBE_API_KEY="<api key>"
-python3 -m tests.test_api --runs 5 --category 2084261179
+python3 -m tests.test_api --runs 5 --category 2092101503
 ```
 
 Prints the detected auth scheme and a per-run line like:
 
 ```
 auth scheme detected: x-api-key (header X-API-Key)
-[OK] cate_items[2084261179] run 1/5 http=200 elapsed=420ms items=20 empty_items=0 avg_fields=8.40
+[OK] cate_items[2092101503] run 1/5 http=200 elapsed=420ms items=20 empty_items=0 avg_fields=8.40
 ```
 
 Exits non-zero if any run returns non-200, an empty list, or a list whose
